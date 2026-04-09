@@ -61,7 +61,7 @@ app.post('/salvar-assinatura', (req, res) => {
 
     const nomeBase = path.parse(nomeArquivo).name;
     const nomeAssinado = `${nomeBase}_assinado.json`;
-    const caminhoDestino = path.join(config.caminhoAssinados, nomeAssinado);
+    const caminhoDestino = path.join(config.caminhoPendentes, nomeAssinado);
     const caminhoPendente = path.join(config.caminhoPendentes, nomeArquivo);
     const registroAssinado = {
         ...documento,
@@ -70,32 +70,26 @@ app.post('/salvar-assinatura', (req, res) => {
         assinaturaBase64: String(base64),
     };
 
-    fs.mkdir(config.caminhoAssinados, { recursive: true }, (erroDiretorio) => {
-        if (erroDiretorio) {
-            return res.status(500).json({ erro: 'Erro ao preparar pasta de assinados' });
+    fs.writeFile(caminhoDestino, JSON.stringify(registroAssinado), 'utf8', (erroSalvar) => {
+        if (erroSalvar) {
+            return res.status(500).json({ erro: 'Erro ao salvar assinatura' });
         }
 
-        fs.writeFile(caminhoDestino, JSON.stringify(registroAssinado), 'utf8', (erroSalvar) => {
-            if (erroSalvar) {
-                return res.status(500).json({ erro: 'Erro ao salvar assinatura' });
+        fs.stat(caminhoDestino, (erroStat, stats) => {
+            if (!erroStat && stats) {
+                const tamanhoKB = (stats.size / 1024).toFixed(2);
+                console.log(`Arquivo arquivado: ${nomeAssinado} (${tamanhoKB} KB)`);
             }
+        });
 
-            fs.stat(caminhoDestino, (erroStat, stats) => {
-                if (!erroStat && stats) {
-                    const tamanhoKB = (stats.size / 1024).toFixed(2);
-                    console.log(`Arquivo arquivado: ${nomeAssinado} (${tamanhoKB} KB)`);
-                }
-            });
-
-            fs.unlink(caminhoPendente, (erroRemover) => {
-                if (erroRemover && erroRemover.code !== 'ENOENT') {
-                    console.error(`[salvar-assinatura] Erro ao remover pendente:`, erroRemover.message);
-                    return res.status(500).json({ erro: 'Assinatura salva, mas falhou ao remover pendente' });
-                }
-                res.status(200).json({
-                    mensagem: 'Documento assinado e arquivado!',
-                    arquivo: nomeAssinado,
-                });
+        fs.unlink(caminhoPendente, (erroRemover) => {
+            if (erroRemover && erroRemover.code !== 'ENOENT') {
+                console.error(`[salvar-assinatura] Erro ao remover pendente:`, erroRemover.message);
+                return res.status(500).json({ erro: 'Assinatura salva, mas falhou ao remover pendente' });
+            }
+            res.status(200).json({
+                mensagem: 'Documento assinado e arquivado!',
+                arquivo: nomeAssinado,
             });
         });
     });
