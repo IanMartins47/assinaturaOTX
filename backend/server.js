@@ -50,8 +50,8 @@ app.get('/pedido/:nomeArquivo', (req, res) => {
     });
 });
 
-// 3. Rota para salvar assinatura em imagem PNG
-app.post('/salvar-assinatura', (req, res) => {
+// 3. Rota para salvar assinatura
+app.post('/salvar-assinatura', async (req, res) => {
     const { nomeArquivo, base64, documento } = req.body;
     console.log(`[salvar-assinatura] Recebido: ${nomeArquivo || 'sem-nome'}`);
 
@@ -59,10 +59,12 @@ app.post('/salvar-assinatura', (req, res) => {
         return res.status(400).json({ erro: 'nomeArquivo, base64 e documento são obrigatórios' });
     }
 
-    const nomeBase = path.parse(nomeArquivo).name;
+    // Nome de destino é sempre estritamente ID_assinado.json, sem sufixos numéricos
+    const nomeBase = path.parse(nomeArquivo).name.replace(/_assinado$/, '');
     const nomeAssinado = `${nomeBase}_assinado.json`;
     const caminhoDestino = path.join(config.caminhoPendentes, nomeAssinado);
     const caminhoPendente = path.join(config.caminhoPendentes, nomeArquivo);
+
     const registroAssinado = {
         ...documento,
         nomeArquivoOriginal: nomeArquivo,
@@ -70,28 +72,39 @@ app.post('/salvar-assinatura', (req, res) => {
         assinaturaBase64: String(base64),
     };
 
-    fs.writeFile(caminhoDestino, JSON.stringify(registroAssinado), 'utf8', (erroSalvar) => {
-        if (erroSalvar) {
-            return res.status(500).json({ erro: 'Erro ao salvar assinatura' });
+    try {
+        // Exclui o _assinado anterior se existir, garantindo substituição limpa
+        try {
+            await fs.promises.unlink(caminhoDestino);
+            console.log(`[salvar-assinatura] Assinado anterior removido: ${nomeAssinado}`);
+        } catch (e) {
+            if (e.code !== 'ENOENT') throw e; // erro real, propaga
+            // ENOENT = não existia, tudo bem
         }
 
-        fs.stat(caminhoDestino, (erroStat, stats) => {
-            if (!erroStat && stats) {
-                const tamanhoKB = (stats.size / 1024).toFixed(2);
-                console.log(`Arquivo arquivado: ${nomeAssinado} (${tamanhoKB} KB)`);
-            }
-        });
+        // Salva o novo arquivo assinado
+        await fs.promises.writeFile(caminhoDestino, JSON.stringify(registroAssinado), 'utf8');
+        const stats = await fs.promises.stat(caminhoDestino);
+        console.log(`[salvar-assinatura] Arquivado: ${nomeAssinado} (${(stats.size / 1024).toFixed(2)} KB)`);
+    } catch (erroSalvar) {
+        console.error(`[salvar-assinatura] Erro ao salvar:`, erroSalvar.message);
+        return res.status(500).json({ erro: 'Erro ao salvar assinatura' });
+    }
 
-        fs.unlink(caminhoPendente, (erroRemover) => {
-            if (erroRemover && erroRemover.code !== 'ENOENT') {
-                console.error(`[salvar-assinatura] Erro ao remover pendente:`, erroRemover.message);
-                return res.status(500).json({ erro: 'Assinatura salva, mas falhou ao remover pendente' });
-            }
-            res.status(200).json({
-                mensagem: 'Documento assinado e arquivado!',
-                arquivo: nomeAssinado,
-            });
-        });
+    // Exclui o pendente original (sem _assinado)
+    try {
+        await fs.promises.unlink(caminhoPendente);
+        console.log(`[salvar-assinatura] Pendente removido: ${nomeArquivo}`);
+    } catch (erroRemover) {
+        if (erroRemover.code !== 'ENOENT') {
+            console.error(`[salvar-assinatura] Nao foi possivel remover pendente (${nomeArquivo}):`, erroRemover.message);
+        }
+        // Não trava o servidor — assinatura já foi salva com sucesso
+    }
+
+    return res.status(200).json({
+        mensagem: 'Documento assinado e arquivado!',
+        arquivo: nomeAssinado,
     });
 });
 
