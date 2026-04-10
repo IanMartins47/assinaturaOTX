@@ -160,7 +160,7 @@ function AssinaturaTelaCheia() {
         ...pedido,
       }
 
-      const response = await fetch('http://192.168.50.53:3000/salvar-assinatura', {
+      const response = await fetch('/api/salvar-assinatura', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
