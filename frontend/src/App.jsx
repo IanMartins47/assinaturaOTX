@@ -20,7 +20,7 @@ function App() {
     <div className="min-h-screen bg-slate-900 text-white">
       <header className="border-b border-slate-700 bg-slate-950/80 px-6 py-5 backdrop-blur">
         <div className="mx-auto max-w-5xl">
-          <h1 className="text-2xl font-semibold tracking-wide">OTX Signature</h1>
+          <h1 className="text-2xl font-semibold tracking-wide">Assinaturas OTX</h1>
         </div>
       </header>
 
